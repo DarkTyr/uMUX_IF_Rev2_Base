@@ -56,7 +56,7 @@ typedef enum _ALL_CMDS {
 } ALL_CMDS_t;
 
 const uint8_t RST_MAGIC_NUM[4] = {0x55, 0x44, 0x33, 0x22};
-#define LOCAL_FW_IDN "uMux_IF_Rev2_Base 0.0.0"
+#define LOCAL_FW_IDN "uMux_IF_Rev2_Base 1.0.0"
 
 
 #endif /* INC_REG_MAP_H_ */

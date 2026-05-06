@@ -70,8 +70,8 @@ volatile uint8_t reg_isr = 0x00;			// Not used
 volatile uint8_t reg_isr_mask = 0x00;		// Not used
 volatile uint8_t time_to_read_temp = 0x00;	// Flag that states to read the temperatures and compare the temp to threshold
 
-uint8_t reg_synth_temp_thld[2] = {0x1C, 0xD4};
-uint8_t reg_side_temp_thld[2] = {0x1C, 0xD4};
+uint8_t reg_synth_temp_thld[2] = {0xD4, 0x1C};
+uint8_t reg_side_temp_thld[2] = {0xAF, 0x8A};
 
 extern DMA_HandleTypeDef    hdma_spi1_tx;
 extern I2C_HandleTypeDef    hi2c2;
@@ -290,8 +290,7 @@ int main(void)
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
 
 					// Copy the Chip ID (AKA Device Unique ID) in to the tx_mem buffer
-					memcpy(&tx_mem[0], (uint8_t*)UID_BASE, 8);	// BAR + 0x00 and 0x04
-					memcpy(&tx_mem[8], (uint8_t*)UID_BASE + 0x14, 4);	// BAR + 0x14
+					memcpy(&tx_mem[0], (uint8_t*)UID_BASE, 12);	// BAR + 0x00 and 0x04
 
 					// Transmit the 12 byte data buffer, let the loop finish the transaction
 					status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], 12);
@@ -332,7 +331,13 @@ int main(void)
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
 
 					// Copy first 16 bytes from the EEPROM which contain the board serial number
-					memcpy(&tx_mem[0], (uint32_t*)INTEEPROM_BAR, 16);
+					// Create a 32bit pointer to index the tx_mem uint8 array
+					uint32_t *tx_mem32ptr = (uint32_t *)tx_mem;
+					for(int x = 0; x < (16 / 4); x++)
+					{
+						tx_mem32ptr[x] = *(__IO uint32_t *)(INTEEPROM_BAR + sizeof(uint32_t) * x);
+
+					}
 
 					// Transmit the 16 byte data buffer, let the loop finish the transaction
 					status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], 16);
@@ -371,8 +376,14 @@ int main(void)
 					while(hspi1.State != HAL_SPI_STATE_READY);	// Wait until all data is sent
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
 
-					// Copy first 16 bytes from the EEPROM which contain the board serial number
-					memcpy((uint32_t*)&tx_mem[0], (uint32_t*)INTEEPROM_BAR, INTEEPROM_BOARD_INFO_BYTES);
+					// Copy 112 bytes from the EEPROM
+					// Create a 32bit pointer to index the tx_mem uint8 array
+					uint32_t *tx_mem32ptr = (uint32_t *)tx_mem;
+					for(int x = 0; x < (INTEEPROM_BOARD_INFO_BYTES / 4); x++)
+					{
+						tx_mem32ptr[x] = *(__IO uint32_t *)(INTEEPROM_BAR + sizeof(uint32_t) * x);
+
+					}
 
 					// Transmit the 16 byte data buffer, let the loop finish the transaction
 					status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], INTEEPROM_BOARD_INFO_BYTES);
@@ -380,6 +391,7 @@ int main(void)
 					{
 					Error_Handler();
 					}
+					
 					// Let the commanding MCU know there is data ready
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
 				}
@@ -459,25 +471,25 @@ int main(void)
 				if(read_nWrite_bit)
 				{
 					tx_mem[0] = RET_VAL_READ_GOOD  | overheat_flag;
-					tx_mem[1] = reg_synth_temp_thld[1];
-					tx_mem[2] = reg_synth_temp_thld[0];
-					tx_mem[3] = reg_side_temp_thld[1];
-					tx_mem[4] = reg_side_temp_thld[0];
+					tx_mem[1] = reg_synth_temp_thld[0];
+					tx_mem[2] = reg_synth_temp_thld[1];
+					tx_mem[3] = reg_side_temp_thld[0];
+					tx_mem[4] = reg_side_temp_thld[1];
 					overheat_flag = 0x00;
 				}
 				else
 				{
 					tx_mem[0] = RET_VAL_WRITE_GOOD  | overheat_flag;
 					// Copy new values over from rx_mem
-					reg_synth_temp_thld[1] = rx_mem[1];
-					reg_synth_temp_thld[0] = rx_mem[2];
-					reg_side_temp_thld[1] = rx_mem[3];
-					reg_side_temp_thld[0] = rx_mem[4];
+					reg_synth_temp_thld[0] = rx_mem[1];
+					reg_synth_temp_thld[1] = rx_mem[2];
+					reg_side_temp_thld[0] = rx_mem[3];
+					reg_side_temp_thld[1] = rx_mem[4];
 					// copy new values back to the tx_mem
-					tx_mem[1] = reg_synth_temp_thld[1];
-					tx_mem[2] = reg_synth_temp_thld[0];
-					tx_mem[3] = reg_side_temp_thld[1];
-					tx_mem[4] = reg_side_temp_thld[0];
+					tx_mem[1] = reg_synth_temp_thld[0];
+					tx_mem[2] = reg_synth_temp_thld[1];
+					tx_mem[3] = reg_side_temp_thld[0];
+					tx_mem[4] = reg_side_temp_thld[1];
 				}
 				status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], CMD_SIZE_STD);
 				if(status != HAL_OK)
@@ -796,8 +808,9 @@ int main(void)
 			case CMD_PROG_EEPROM:
 				if(read_nWrite_bit)
 				{
+					// Read the EEPROM
 					// Good command, return the number of bytes the software needs to read back for the next transaction
-					tx_mem[0] = RET_VAL_READ_GOOD;
+					tx_mem[0] = RET_VAL_READ_GOOD  | overheat_flag;
 					tx_mem[1] = INTEEPROM_BOARD_INFO_BYTES; // Bytes
 					status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], CMD_SIZE_STD);
 					if(status != HAL_OK)
@@ -809,8 +822,13 @@ int main(void)
 					while(hspi1.State != HAL_SPI_STATE_READY);	// Wait until all data is sent
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
 
-					// Copy 112 bytes from the EEPROM which contain the board serial number
-					memcpy(&tx_mem[0], (uint8_t*)INTEEPROM_BAR, INTEEPROM_BOARD_INFO_BYTES);
+					// Copy 112 bytes from the EEPROM
+					// Create a 32bit pointer to index the tx_mem uint8 array
+					uint32_t *tx_mem32ptr = (uint32_t *)tx_mem;
+					for(int x = 0; x < (INTEEPROM_BOARD_INFO_BYTES / 4); x++)
+					{
+						tx_mem32ptr[x] = *(__IO uint32_t *)(INTEEPROM_BAR + sizeof(uint32_t)* x);
+					}
 
 					// Transmit the 112 byte data buffer, let the loop finish the transaction
 					status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], INTEEPROM_BOARD_INFO_BYTES);
@@ -818,6 +836,7 @@ int main(void)
 					{
 						Error_Handler();
 					}
+
 					// Let the commanding MCU know there is data ready
 					HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
 				}
@@ -825,14 +844,12 @@ int main(void)
 				{
 					if(rx_mem[1] == INTEEPROM_BOARD_INFO_BYTES)
 					{
+						// Write the EEPROM
 						// Create structures and variables to program the flash
 						uint32_t page_error = 0;
 						static FLASH_EraseInitTypeDef EraseInitStruct;
 						EraseInitStruct.TypeErase   = FLASH_TYPEERASE_PAGES;
-
-
 						EraseInitStruct.NbPages     = 1;
-
 						if (INTEEPROM_BAR < (FLASH_BASE + FLASH_BANK_SIZE))
 						{
 							/* Bank 1 */
@@ -847,7 +864,6 @@ int main(void)
 						// Let the commanding MCU know there is data ready
 						HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
 						while(hspi1.State != HAL_SPI_STATE_READY);	// Wait until all data is sent
-
 						HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
 
 						// Prepare to receive the incoming EEPROM data
@@ -865,16 +881,18 @@ int main(void)
 						// Now we have the data, write it to the internal EEPROM
 						HAL_FLASH_Unlock();
 						__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_OPTVERR);
-						__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_PGSERR);
-						__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_PGAERR);
+						__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGSERR );
 
 						// Erase the flash page
 						HAL_FLASHEx_Erase(&EraseInitStruct, &page_error);
+
 						// Must write to the flash in chunks of 8 Bytes
+						uint64_t *rx_mem64ptr = (uint64_t *)rx_mem;
 						for(int x = 0; x < (INTEEPROM_BOARD_INFO_BYTES / 8); x++)
 						{
 							// status = HAL_DATA_EEPROMEx_Program(FLASH_TYPEPROGRAMDATA_BYTE, INTEEPROM_BAR + x, rx_mem[x]);
-							status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, INTEEPROM_BAR + x, (uint64_t)rx_mem[x]);
+							// Set to index the rx_mem by 64bit chunks and then the address where it is writing by 64bit chunks (8 bytes)
+							status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, INTEEPROM_BAR + (x * 8), rx_mem64ptr[x]);
 							if(status != HAL_OK)
 							{
 								tx_mem[0] = RET_VAL_WRITE_GOOD;
@@ -884,8 +902,26 @@ int main(void)
 								break;
 							}
 						}
+
 						HAL_FLASH_Lock();
-						tx_mem[0] = RET_VAL_WRITE_GOOD;
+
+						if(status == HAL_OK)
+						{
+							tx_mem[0] = RET_VAL_WRITE_GOOD;
+							tx_mem[1] = INTEEPROM_BOARD_INFO_BYTES;
+						}
+
+						// send response
+						status = HAL_SPI_Transmit_DMA(&hspi1, &tx_mem[0], CMD_SIZE_STD);
+						if(status != HAL_OK)
+						{
+							Error_Handler();
+						}
+						HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
+					}
+					else
+					{
+						tx_mem[0] = RET_VAL_INVALID_CMD  | overheat_flag;
 						tx_mem[1] = INTEEPROM_BOARD_INFO_BYTES;
 
 						// send response
@@ -895,9 +931,9 @@ int main(void)
 							Error_Handler();
 						}
 						HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
-						}	// if(rx_mem[1] == INTEEPROM_BOARD_INFO_BYTES)
-					}	// if(read_nWrite_bit)
-					break;	// case CMD_LOCAL_FW_EEPROM
+					}	// if(rx_mem[1] == INTEEPROM_BOARD_INFO_BYTES)
+				}	// if(read_nWrite_bit)
+				break;	// case CMD_LOCAL_FW_EEPROM
 
 			default:
 				tx_mem[0] = RET_VAL_INVALID_CMD;
@@ -937,11 +973,16 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE
+                              |RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_BYPASS;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_8;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
   RCC_OscInitStruct.PLL.PLLN = 20;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
@@ -964,6 +1005,10 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
+  /** Enable MSI Auto calibration
+  */
+  HAL_RCCEx_EnableMSIPLLMode();
 }
 
 /* USER CODE BEGIN 4 */

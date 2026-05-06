@@ -69,6 +69,7 @@ void Error_Handler(void);
 #define SPI1_nINT_GPIO_Port GPIOB
 #define SPI1_nRST_Pin GPIO_PIN_7
 #define SPI1_nRST_GPIO_Port GPIOB
+#define SPI1_nRST_EXTI_IRQn EXTI9_5_IRQn
 #define LED_TIM16_Pin GPIO_PIN_8
 #define LED_TIM16_GPIO_Port GPIOB
 

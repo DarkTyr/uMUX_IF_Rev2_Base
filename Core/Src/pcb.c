@@ -88,7 +88,7 @@ const GPIO_DEF_t gpio_array[] =
 {	//Port                   ,    Pin           , Writable, Init_val
 	{SPI1_nINT_GPIO_Port, 		SPI1_nINT_Pin, 		0x01,	GPIO_PIN_SET},	//    LSB of BIT information
 	{Op_Amp_En_GPIO_Port, 		Op_Amp_En_Pin, 		0x01, 	GPIO_PIN_SET},	// Rev1 of PCB, this trace is cut, rev2 changed to an Enable
-	{Synth_Enable_GPIO_Port,	Synth_Enable_Pin, 	0x01, 	GPIO_PIN_RESET},
+	{Synth_Enable_GPIO_Port,	Synth_Enable_Pin, 	0x01, 	GPIO_PIN_SET},
 	{LoopBack_En_GPIO_Port, 	LoopBack_En_Pin,	0x01,	GPIO_PIN_SET},
 	{Synth_CS0_GPIO_Port, 		Synth_CS0_Pin, 		0x01, 	GPIO_PIN_SET},
 	{SPI1_nRST_GPIO_Port, 		SPI1_nRST_Pin,		0x00,	GPIO_PIN_RESET}	// Input Pin
@@ -359,12 +359,48 @@ void pcb_set_null_ctrl_state(uint8_t* buf)
 {
 	if(buf[0] == 0x01)
 	{
+		// Enabled
 		HAL_GPIO_WritePin(Op_Amp_En_GPIO_Port, Op_Amp_En_Pin, GPIO_PIN_SET);
+		pcb_dac_powerup();
 	}
 	else
 	{
+		// Disabled
 		HAL_GPIO_WritePin(Op_Amp_En_GPIO_Port, Op_Amp_En_Pin, GPIO_PIN_RESET);
+		pcb_dac_shutdown();
 	}
+}
+
+void pcb_dac_shutdown()
+{
+	uint8_t i2c_buf[2] = {0x03, 0x01};
+	HAL_I2C_Mem_Write(&hi2c2,
+				   DAC_UP_ADDR << 1,
+				   DAC_REG_h3, 0x01,
+				   &i2c_buf[0], 0x02,
+				   1000);
+
+	HAL_I2C_Mem_Write(&hi2c2,
+				   DAC_DN_ADDR << 1,
+				   DAC_REG_h3, 0x01,
+				   &i2c_buf[0], 0x02,
+				   1000);
+}
+
+void pcb_dac_powerup()
+{
+	uint8_t i2c_buf[2] = {0x00, 0x00};
+	HAL_I2C_Mem_Write(&hi2c2,
+				   DAC_UP_ADDR << 1,
+				   DAC_REG_h3, 0x01,
+				   &i2c_buf[0], 0x02,
+				   1000);
+
+	HAL_I2C_Mem_Write(&hi2c2,
+				   DAC_DN_ADDR << 1,
+				   DAC_REG_h3, 0x01,
+				   &i2c_buf[0], 0x02,
+				   1000);
 }
 
 HAL_StatusTypeDef pcb_init_synth(void)
@@ -411,8 +447,8 @@ HAL_StatusTypeDef pcb_synth_get_reg(uint8_t* buf_send, uint8_t* buf_rcvd)
 	buf_send[1] = 0x00;
 	buf_send[2] = 0x00;
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	return status;
 }
 
@@ -422,8 +458,8 @@ HAL_StatusTypeDef pcb_synth_set_reg(uint8_t* buf_send, uint8_t* buf_rcvd)
 	HAL_StatusTypeDef status = HAL_OK;
 	buf_send[0] = buf_send[0] & 0x7F;	// MSB of register addr is R/nW
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	return status;
 }
 
@@ -436,9 +472,8 @@ HAL_StatusTypeDef pcb_synth_shutdown(void)
 	// Read back register zero
 	buf_send[0] = buf_send[0] | 0x80;	// MSB of register addr is R/nW
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
-
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_RESET);
 	// Copy the read data over
 	buf_send[0] = buf_rcvd[0];
 	buf_send[1] = buf_rcvd[1];
@@ -450,23 +485,22 @@ HAL_StatusTypeDef pcb_synth_shutdown(void)
 	buf_send[2] = buf_send[2] | 0x01; // Assign the powerdown bit
 	buf_send[2] = buf_send[2] & ~(0x1 << 3);
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_RESET);
 	return status;
 }
 
 HAL_StatusTypeDef pcb_synth_rst(void)
 {
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	HAL_StatusTypeDef status = HAL_OK;
 	uint8_t buf_send[3] = {0x00};
 	uint8_t buf_rcvd[3] = {0x00};
 	// Read back register zero
 	buf_send[0] = buf_send[0] | 0x80;	// MSB of register addr is R/nW
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
-
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_RESET);
 	// Copy the read data over
 	buf_send[0] = buf_rcvd[0];
 	buf_send[1] = buf_rcvd[1];
@@ -478,8 +512,8 @@ HAL_StatusTypeDef pcb_synth_rst(void)
 	buf_send[2] = buf_send[2] | 0x02; // Assign the reset bit
 	buf_send[2] = buf_send[2] & ~(0x1 << 3);	// Set FCAL to zero
 	status = HAL_SPI_TransmitReceive_DMA(&hspi2, &buf_send[0], &buf_rcvd[0], 0x03);
-	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	while(hspi2.State != HAL_SPI_STATE_READY);
+	HAL_GPIO_WritePin(Synth_CS0_GPIO_Port, Synth_CS0_Pin, GPIO_PIN_SET);
 	// Reset bit is self resting to zero once done
 	return status;
 }

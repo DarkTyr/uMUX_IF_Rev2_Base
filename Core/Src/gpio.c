@@ -53,13 +53,16 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LoopBack_En_Pin|Synth_Enable_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LoopBack_En_GPIO_Port, LoopBack_En_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Op_Amp_En_Pin|Synth_CS0_Pin|SPI1_nINT_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : PC13 PC14 PC15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(Synth_Enable_GPIO_Port, Synth_Enable_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : PC13 PC15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -93,12 +96,19 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : Op_Amp_En_Pin Synth_CS0_Pin */
-  GPIO_InitStruct.Pin = Op_Amp_En_Pin|Synth_CS0_Pin;
+  /*Configure GPIO pin : Op_Amp_En_Pin */
+  GPIO_InitStruct.Pin = Op_Amp_En_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(Op_Amp_En_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Synth_CS0_Pin */
+  GPIO_InitStruct.Pin = Synth_CS0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(Synth_CS0_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SPI1_nINT_Pin */
   GPIO_InitStruct.Pin = SPI1_nINT_Pin;
@@ -109,12 +119,16 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : SPI1_nRST_Pin */
   GPIO_InitStruct.Pin = SPI1_nRST_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(SPI1_nRST_GPIO_Port, &GPIO_InitStruct);
 
   /**/
   __HAL_SYSCFG_FASTMODEPLUS_ENABLE(SYSCFG_FASTMODEPLUS_PB6);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 

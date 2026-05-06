@@ -28,6 +28,8 @@ void pcb_set_loopback_state(uint8_t* buf);
 
 void pcb_get_null_ctrl_state(uint8_t* buf);
 void pcb_set_null_ctrl_state(uint8_t* buf);
+void pcb_dac_shutdown();
+void pcb_dac_powerup();
 
 HAL_StatusTypeDef pcb_init_synth(void);
 HAL_StatusTypeDef pcb_synth_status(uint8_t* buf_rcvd);
