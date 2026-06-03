@@ -873,7 +873,7 @@ int main(void)
               Error_Handler();
             }
 
-            HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
+//            HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_RESET);
             while(hspi1.State != HAL_SPI_STATE_READY);
             __HAL_TIM_ENABLE(&htim16);
             HAL_GPIO_WritePin(SPI1_nINT_GPIO_Port, SPI1_nINT_Pin, GPIO_PIN_SET);
