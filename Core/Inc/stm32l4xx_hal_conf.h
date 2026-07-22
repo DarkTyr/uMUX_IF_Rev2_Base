@@ -152,7 +152,7 @@
 #endif /* LSE_VALUE */
 
 #if !defined  (LSE_STARTUP_TIMEOUT)
-  #define LSE_STARTUP_TIMEOUT    100U   /*!< Time out for LSE start up, in ms */
+  #define LSE_STARTUP_TIMEOUT    1000U   /*!< Time out for LSE start up, in ms */
 #endif /* HSE_STARTUP_TIMEOUT */
 
 /**
